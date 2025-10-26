@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import pytest
+import json
 from app import app as flask_app
 
 @pytest.fixture
@@ -13,14 +14,15 @@ def client(app):
 def test_home(client):
     """Testa o endpoint principal."""
     res = client.get('/')
+    data = json.loads(res.data) # Decodifica o JSON
     assert res.status_code == 200
-    assert "Olá! Aplicação de exemplo".encode("utf-8") in res.data
+    assert "Olá! Aplicação de exemplo" in data["message"] # Verifica dentro da chave "message"
 
 def test_health_check(client):
     """Testa o endpoint de health check."""
     res = client.get('/health')
     assert res.status_code == 200
-    assert b"UP" in res.data
+    assert res.data == b"OK"
 
 def test_status_code_valid(client):
     """Testa o endpoint de status com um código válido."""
@@ -30,6 +32,7 @@ def test_status_code_valid(client):
 def test_status_code_invalid(client):
     """Testa o endpoint de status com um código inválido."""
     res = client.get('/status/999')
+    data = json.loads(res.data) # Decodifica o JSON
     assert res.status_code == 400
-    assert "inválido".encode("utf-8") in res.data
+    assert "inválido" in data["error"] # Verifica dentro da chave "error"
 
