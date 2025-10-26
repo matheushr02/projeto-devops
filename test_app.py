@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import pytest
 from app import app as flask_app
 
@@ -13,7 +14,7 @@ def test_home(client):
     """Testa o endpoint principal."""
     res = client.get('/')
     assert res.status_code == 200
-    assert b"Ol\u00e1! Aplica\u00e7\u00e3o de exemplo" in res.data
+    assert "Olá! Aplicação de exemplo".encode("utf-8") in res.data
 
 def test_health_check(client):
     """Testa o endpoint de health check."""
@@ -30,4 +31,5 @@ def test_status_code_invalid(client):
     """Testa o endpoint de status com um código inválido."""
     res = client.get('/status/999')
     assert res.status_code == 400
-    assert b"inv\u00e1lido" in res.data
+    assert "inválido".encode("utf-8") in res.data
+
