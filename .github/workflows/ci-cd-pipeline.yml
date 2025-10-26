@@ -1,52 +1,69 @@
-name: Pipeline de CI/CD - Projeto DevOps
+# Workflow de CI/CD para o Projeto DevOps
+# Este pipeline será acionado em cada push para a branch 'main'
+
+name: CI/CD Pipeline DevOps
 
 on:
   push:
-    branches: [ "main" ] # Dispara o pipeline em pushes para a branch main
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }} # Nome da imagem: <usuario>/<repositorio>
+    branches:
+      - main
+  # Permite que o pipeline seja executado manualmente pela UI do GitHub
+  workflow_dispatch:
 
 jobs:
+  # --- Job 1: Build, Teste e Push da Imagem Docker ---
   build-and-push-image:
-    name: Build e Push da Imagem Docker
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
+    outputs:
+      # Define a tag da imagem para ser usada em jobs futuros (ex: deploy)
+      tag: latest
+    
     steps:
-      - name: Checkout do repositório
+      # 1. Clona o repositório
+      - name: Fazer Checkout do repositório
         uses: actions/checkout@v3
 
-      - name: Configurar Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
+      # 2. Configura o QEMU (necessário para build multi-plataforma com buildx)
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
 
-      - name: Instalar dependências e rodar testes
-        run: |
-          pip install -r requirements.txt
-          pytest
+      # 3. Configura o Docker Buildx (builder avançado)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
 
+      # 4. Faz login no GitHub Container Registry (ghcr.io)
+      #    Usa um token temporário (GITHUB_TOKEN) que o GitHub Actions fornece.
       - name: Fazer login no GitHub Container Registry
         uses: docker/login-action@v2
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      
+      # 5. Configura o Python para rodar os testes
+      - name: Configurar Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          
+      # 6. Instala as dependências Python
+      - name: Instalar dependências e rodar testes
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pytest
 
+      # 7. Extrai metadados (tags, labels) para a imagem Docker
       - name: Extrair metadados da imagem (tags, labels)
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ghcr.io/${{ github.repository }}
           tags: |
-            type=sha
-            latest
+            type=raw,value=latest
 
-      - name: Build e Push da imagem Docker
+      # 8. Faz o build da imagem Docker e a envia para o GHCR
+      - name: Build e Push da Imagem Docker
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -54,34 +71,42 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
+  # --- Job 2: Deploy no Kubernetes com Helm ---
   deploy-to-kubernetes:
-    name: Deploy no Kubernetes com Helm
-    needs: build-and-push-image # Este job só roda após o sucesso do anterior
     runs-on: ubuntu-latest
-
+    needs: build-and-push-image # Depende do Job 1
+    
     steps:
-      - name: Checkout do repositório
+      # 1. Clona o repositório
+      - name: Fazer Checkout do repositório
         uses: actions/checkout@v3
-
-      - name: Configurar kubectl
-        uses: azure/k8s-set-context@v3
+        
+      # 2. Inicia um cluster Minikube DENTRO do runner do GitHub Actions
+      #    Esta é a correção principal: não tentamos mais acessar seu PC.
+      - name: Start Minikube
+        uses: medyagh/setup-minikube@v0.0.12
         with:
-          method: kubeconfig
-          # ATENÇÃO: O KUBECONFIG deve ser armazenado como um secret no GitHub
-          # Vá em Settings > Secrets and variables > Actions > New repository secret
-          # Nome: KUBECONFIG
-          # Conteúdo: O conteúdo do seu arquivo ~/.kube/config para acesso ao cluster
-          kubeconfig: ${{ secrets.KUBECONFIG }}
-
-      - name: Configurar Helm
-        uses: azure/setup-helm@v3
-        with:
-          version: 'v3.10.1'
-
+          driver: docker
+          kubernetes-version: 'v1.23.1' # Versão estável do Kubernetes
+          
+      # 3. Faz o deploy ou atualização usando o Helm
       - name: Deploy com Helm
         run: |
+          # O 'setup-minikube' já configura o kubectl para nós.
+          # Usamos 'upgrade --install' que instala se não existir, ou atualiza se já existir.
+          # O nome do release será 'projeto-devops'
           helm upgrade --install projeto-devops ./helm \
-            --namespace default \
-            --set image.repository=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} \
-            --set image.tag=${{ github.sha }} \
-            --wait
+            --set image.repository=ghcr.io/${{ github.repository }} \
+            --set image.tag=${{ needs.build-and-push-image.outputs.tag }} \
+            --set image.pullPolicy=Always \
+            --wait # Espera o deploy ser concluído
+
+      # 4. Verifica se os pods foram criados
+      - name: Verificar status do deploy
+        run: |
+          echo "Aguardando 30s para o pod iniciar..."
+          sleep 30
+          echo "Status dos Pods:"
+          kubectl get pods -A
+          echo "Status dos Services:"
+          kubectl get service -A
