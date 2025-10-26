@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "projeto-devops.fullname" . }}
+  labels:
+    {{- include "projeto-devops.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.targetPort }}
+      protocol: TCP
+      name: http
+      # Se o tipo for NodePort, você pode especificar a porta aqui
+      # nodePort: 30007
+  selector:
+    {{- include "projeto-devops.selectorLabels" . | nindent 4 }}

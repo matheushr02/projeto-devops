@@ -1,0 +1,87 @@
+name: Pipeline de CI/CD - Projeto DevOps
+
+on:
+  push:
+    branches: [ "main" ] # Dispara o pipeline em pushes para a branch main
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }} # Nome da imagem: <usuario>/<repositorio>
+
+jobs:
+  build-and-push-image:
+    name: Build e Push da Imagem Docker
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v3
+
+      - name: Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Instalar dependências e rodar testes
+        run: |
+          pip install -r requirements.txt
+          pytest
+
+      - name: Fazer login no GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extrair metadados da imagem (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha
+            latest
+
+      - name: Build e Push da imagem Docker
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  deploy-to-kubernetes:
+    name: Deploy no Kubernetes com Helm
+    needs: build-and-push-image # Este job só roda após o sucesso do anterior
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v3
+
+      - name: Configurar kubectl
+        uses: azure/k8s-set-context@v3
+        with:
+          method: kubeconfig
+          # ATENÇÃO: O KUBECONFIG deve ser armazenado como um secret no GitHub
+          # Vá em Settings > Secrets and variables > Actions > New repository secret
+          # Nome: KUBECONFIG
+          # Conteúdo: O conteúdo do seu arquivo ~/.kube/config para acesso ao cluster
+          kubeconfig: ${{ secrets.KUBECONFIG }}
+
+      - name: Configurar Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: 'v3.10.1'
+
+      - name: Deploy com Helm
+        run: |
+          helm upgrade --install projeto-devops ./helm \
+            --namespace default \
+            --set image.repository=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} \
+            --set image.tag=${{ github.sha }} \
+            --wait

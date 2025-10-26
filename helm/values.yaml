@@ -1,0 +1,28 @@
+# Valores padrão para o chart projeto-devops
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/your-username/your-repo # Será sobrescrito pelo pipeline
+  pullPolicy: IfNotPresent
+  tag: "" # Será preenchido pelo pipeline com o commit SHA
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  type: NodePort # Use NodePort para facilitar o acesso em Minikube/Kind
+  port: 80
+  targetPort: 5000 # Porta da aplicação Flask
+
+ingress:
+  enabled: false
+
+resources: {}
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: projeto-devops
+description: Um Helm chart para a aplicação de exemplo do projeto DevOps.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
