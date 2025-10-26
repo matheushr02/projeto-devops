@@ -35,4 +35,3 @@ def test_status_code_invalid(client):
     data = json.loads(res.data) # Decodifica o JSON
     assert res.status_code == 400
     assert "inválido" in data["error"] # Verifica dentro da chave "error"
-
