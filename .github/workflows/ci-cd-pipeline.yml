@@ -10,6 +10,13 @@ on:
   # Permite que o pipeline seja executado manualmente pela UI do GitHub
   workflow_dispatch:
 
+# --- CORREÇÃO ADICIONADA AQUI ---
+# Define as permissões para o GITHUB_TOKEN usado neste workflow
+permissions:
+  contents: read      # Permissão de leitura do repositório (para checkout)
+  packages: write     # Permissão de escrita de pacotes (para push no ghcr.io)
+# --- FIM DA CORREÇÃO ---
+
 jobs:
   # --- Job 1: Build, Teste e Push da Imagem Docker ---
   build-and-push-image:
