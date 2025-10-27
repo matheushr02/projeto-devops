@@ -1,0 +1,72 @@
+services:
+  # Serviço da sua aplicação Flask
+  app:
+    build: . # Constrói a imagem a partir do Dockerfile na raiz
+    container_name: app-para-logs # Nome que o Filebeat procura
+    ports:
+      - "5001:5000" # Mapeia a porta 5000 do container para 5001 no seu PC
+    networks:
+      - elk # Coloca na mesma rede dos outros serviços
+    # Garante que os logs vão para STDOUT/STDERR para o Docker coletar
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on: # Espera o Elasticsearch estar pronto (opcional, mas bom)
+      - elasticsearch
+
+  # Serviço do Elasticsearch
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.5
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m" 
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - elk
+
+  # Serviço do Kibana
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.17.5
+    container_name: kibana
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch # Espera o Elasticsearch iniciar
+    networks:
+      - elk
+
+  # Serviço do Filebeat (corrigido para Windows)
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:7.17.5
+    container_name: filebeat
+    user: root 
+    volumes:
+      # Aponta para o filebeat.yml dentro da pasta logging
+      - ./logging/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      # Monta o socket do Docker (essencial) - formato Windows com named pipe
+      - //var/run/docker.sock:/var/run/docker.sock:ro
+      # Monta os logs dos containers Docker (necessário para ler os logs)
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    
+    # Comando para iniciar com permissões relaxadas (necessário para Windows)
+    command: filebeat -e -strict.perms=false
+    depends_on: # Espera o Elasticsearch e a App estarem prontos
+      - elasticsearch
+      - app 
+    networks:
+      - elk
+
+# Define a rede compartilhada
+networks:
+  elk:
+    driver: bridge
+
+# Define o volume persistente para o Elasticsearch
+volumes:
+  elasticsearch_data:

@@ -1,25 +1,59 @@
-# filebeat.yml - VERSÃO FINAL CORRIGIDA
+# filebeat.yml - Configuração corrigida para ELK Stack
 filebeat.autodiscover:
   providers:
     - type: docker
+      hints.enabled: true
       templates:
         - condition:
             contains:
-              docker.container.name: 'app-para-logs' 
+              docker.container.name: 'app-para-logs'
           config:
             - type: container
-              paths: 
+              paths:
                 - /var/lib/docker/containers/${data.docker.container.id}/*.log
-              stream: all 
-              # --- CORREÇÃO FINAL ---
-              # Removendo explicitamente QUALQUER tentativa de parse JSON
-              # As linhas 'json...' foram completamente removidas.
-              # ----------------------
+              # Parse dos logs em JSON
+              json.keys_under_root: true
+              json.add_error_key: true
+              json.message_key: log
+              json.overwrite_keys: true
+              # Adiciona campos customizados
+              fields:
+                app: flask-devops
+                environment: development
+              fields_under_root: true
 
+# Processadores para enriquecer os logs
 processors:
-  - add_docker_metadata: ~
+  - add_docker_metadata:
+      host: "unix:///var/run/docker.sock"
+  - decode_json_fields:
+      fields: ["message", "log"]
+      target: ""
+      overwrite_keys: true
+      add_error_key: true
+  - drop_fields:
+      fields: ["agent.ephemeral_id", "agent.id", "ecs.version", "input.type"]
+      ignore_missing: true
 
+# Output para Elasticsearch
 output.elasticsearch:
   hosts: ["elasticsearch:9200"]
+  index: "flask-logs-%{+yyyy.MM.dd}"
+  # Configurações de conexão
+  timeout: 90
+  max_retries: 3
+  backoff.init: 1s
+  backoff.max: 60s
 
-logging.level: debug
+# Desabilitar ILM e configurar template
+setup.ilm.enabled: false
+setup.template.name: "flask-logs"
+setup.template.pattern: "flask-logs-*"
+setup.template.settings:
+  index.number_of_shards: 1
+  index.number_of_replicas: 0
+
+# Configuração de logging do Filebeat
+logging.level: info
+logging.to_stderr: true
+logging.metrics.enabled: false

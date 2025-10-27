@@ -13,8 +13,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copiar o código da aplicação para o diretório de trabalho
 COPY . .
 
+# Definir variável de ambiente para o Flask
+ENV FLASK_APP=app.py
+
 # Expor a porta que a aplicação vai rodar
 EXPOSE 5000
 
 # Comando para executar a aplicação
-CMD ["flask", "run", "--host=0.0.0.0"]
+CMD ["python", "app.py"]
