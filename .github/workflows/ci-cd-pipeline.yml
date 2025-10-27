@@ -94,7 +94,9 @@ jobs:
         uses: medyagh/setup-minikube@v0.0.12
         with:
           driver: docker
-          kubernetes-version: 'v1.23.1' # Versão estável do Kubernetes
+          # --- CORREÇÃO APLICADA AQUI ---
+          # Atualiza a versão do Kubernetes para uma suportada pelo Minikube v1.37.0
+          kubernetes-version: 'v1.29.0'
           
       # 3. Faz o deploy ou atualização usando o Helm
       - name: Deploy com Helm
