@@ -1,0 +1,25 @@
+# filebeat.yml - VERSÃO FINAL CORRIGIDA
+filebeat.autodiscover:
+  providers:
+    - type: docker
+      templates:
+        - condition:
+            contains:
+              docker.container.name: 'app-para-logs' 
+          config:
+            - type: container
+              paths: 
+                - /var/lib/docker/containers/${data.docker.container.id}/*.log
+              stream: all 
+              # --- CORREÇÃO FINAL ---
+              # Removendo explicitamente QUALQUER tentativa de parse JSON
+              # As linhas 'json...' foram completamente removidas.
+              # ----------------------
+
+processors:
+  - add_docker_metadata: ~
+
+output.elasticsearch:
+  hosts: ["elasticsearch:9200"]
+
+logging.level: debug
